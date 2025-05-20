@@ -2,12 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Container, Box } from '@mui/material';
 import MicIcon from '@mui/icons-material/Mic';
-import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
-import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
-import TextToSpeech from './pages/TextToSpeech';
-import SpeechToText from './pages/SpeechToText';
-import AzureWhisperStreamingPage from './pages/AzureWhisperStreamingPage';
-import VoiceChatPage from './pages/VoiceChatPage';
+
 import InterviewPage from './pages/InterviewPage';
 
 function App() {
@@ -21,38 +16,6 @@ function App() {
           <Button 
             color="inherit" 
             component={Link} 
-            to="/speech-to-text"
-            startIcon={<MicIcon />}
-          >
-            Speech to Text
-          </Button>
-          <Button 
-            color="inherit" 
-            component={Link} 
-            to="/text-to-speech"
-            startIcon={<RecordVoiceOverIcon />}
-          >
-            Text to Speech
-          </Button>
-          <Button 
-            color="inherit" 
-            component={Link} 
-            to="/azure-whisper-streaming"
-            startIcon={<RadioButtonCheckedIcon />}
-          >
-            Azure Whisper
-          </Button>
-          <Button 
-            color="inherit" 
-            component={Link} 
-            to="/voice-chat"
-            startIcon={<RadioButtonCheckedIcon />}
-          >
-            Voice Chat
-          </Button>
-          <Button 
-            color="inherit" 
-            component={Link} 
             to="/interview"
             startIcon={<MicIcon />}
           >
@@ -63,10 +26,6 @@ function App() {
       
       <Container>
         <Routes>
-          <Route path="/speech-to-text" element={<SpeechToText />} />
-          <Route path="/text-to-speech" element={<TextToSpeech />} />
-          <Route path="/azure-whisper-streaming" element={<AzureWhisperStreamingPage />} />
-          <Route path="/voice-chat" element={<VoiceChatPage />} />
           <Route path="/interview" element={<InterviewPage />} />
           <Route path="/" element={<Home />} />
         </Routes>
@@ -95,36 +54,7 @@ function Home() {
       </Typography>
       
       <Box sx={{ mt: 4, display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<MicIcon />}
-          component={Link}
-          to="/speech-to-text"
-        >
-          Speech to Text
-        </Button>
-        
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<RecordVoiceOverIcon />}
-          component={Link}
-          to="/text-to-speech"
-        >
-          Text to Speech
-        </Button>
-        
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<RadioButtonCheckedIcon />}
-          component={Link}
-          to="/azure-whisper-streaming"
-        >
-          Azure Whisper
-        </Button>
-        
+       
         <Button
           variant="contained"
           size="large"
