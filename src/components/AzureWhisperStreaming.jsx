@@ -5,13 +5,13 @@ import StopIcon from '@mui/icons-material/Stop';
 import { createAudioChunkHandler } from '../services/audioRecordingService';
 import { transcribeAudio } from '../services/whisperService';
 
-const AzureWhisperStreaming = ({ 
-  onTextUpdate, 
-  onLoadingChange, 
-  onActivityChange, 
+const AzureWhisperStreaming = ({
+  onTextUpdate,
+  onLoadingChange,
+  onActivityChange = () => {},
   onError,
   onRecordingStart,
-  isSpeaking 
+  isSpeaking
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [audioHandler, setAudioHandler] = useState(null);
