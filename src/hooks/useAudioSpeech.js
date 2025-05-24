@@ -47,6 +47,7 @@ export const useAudioSpeech = (voice = 'nova') => {
           break;
         }
         
+        
         currentText += (i > 0 ? ' ' : '') + words[i];
         
         if (onTextUpdate) {
