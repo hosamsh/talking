@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
-import { getLLMResponseStream } from '../services/azoaiLlm';
+import { getLLMResponseStream } from '../services/llm';
 import { interviewPrompts } from '../config/interviewPrompts';
 
-export const useInterviewConversation = () => {
+export const useChat = () => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const conversationRef = useRef([]);

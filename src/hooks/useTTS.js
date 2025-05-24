@@ -1,22 +1,34 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { textToSpeech } from '../services/azoaiTts';
+import { textToSpeech } from '../services/tts';
 
-export const useAudioSpeech = (voice = 'nova') => {
+export const useTTS = (voice = 'nova') => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioRef = useRef(null);
   const playbackCancelToken = useRef(null);
 
-  const stopPlayback = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
+  const stopPlayback = useCallback(async () => {
+    console.log('stopPlayback called, isSpeaking:', isSpeaking);
     
     if (playbackCancelToken.current) {
+      console.log('Setting cancel token to true');
       playbackCancelToken.current.cancelled = true;
     }
     
+    if (audioRef.current) {
+      console.log('Pausing audio, current time:', audioRef.current.currentTime);
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0; // Reset to beginning
+      audioRef.current.src = ''; // Clear the source
+      
+      // Wait longer for audio resources to fully release
+      console.log('Waiting for audio resources to release...');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      console.log('Audio resources should be released now');
+    }
+    
     setIsSpeaking(false);
-  }, []);
+    console.log('stopPlayback completed');
+  }, [isSpeaking]);
 
   const playAudioWithTyping = useCallback(async (text, cancelToken, onTextUpdate) => {
     if (!text.trim()) return;
@@ -28,31 +40,22 @@ export const useAudioSpeech = (voice = 'nova') => {
       const url = URL.createObjectURL(blob);
       
       audioRef.current.src = url;
-      
       await new Promise(resolve => {
         audioRef.current.onloadedmetadata = resolve;
       });
       
       const audioDuration = audioRef.current.duration * 1000 || text.length * 67;
-      
       audioRef.current.play();
       
-      // Type the text gradually while audio plays
       const words = text.split(' ');
       const timePerWord = audioDuration / words.length;
       let currentText = '';
       
       for (let i = 0; i < words.length; i++) {
-        if (cancelToken && cancelToken.cancelled) {
-          break;
-        }
-        
+        if (cancelToken?.cancelled) break;
         
         currentText += (i > 0 ? ' ' : '') + words[i];
-        
-        if (onTextUpdate) {
-          onTextUpdate(currentText);
-        }
+        onTextUpdate?.(currentText);
         
         await new Promise((resolve) => {
           const timer = setTimeout(resolve, timePerWord);
@@ -68,11 +71,9 @@ export const useAudioSpeech = (voice = 'nova') => {
         });
       }
       
-      // Wait for audio to finish if it's still playing and not cancelled
-      if (!audioRef.current.ended && !(cancelToken && cancelToken.cancelled)) {
+      if (!audioRef.current.ended && !cancelToken?.cancelled) {
         await new Promise(resolve => {
           audioRef.current.onended = resolve;
-          
           if (cancelToken) {
             const checkInterval = setInterval(() => {
               if (cancelToken.cancelled) {
@@ -94,12 +95,13 @@ export const useAudioSpeech = (voice = 'nova') => {
     }
   }, [voice]);
 
-  // Clean up
+  const handleRecordingStart = useCallback(async () => {
+    if (isSpeaking) await stopPlayback(); // Now waits for stopPlayback to complete
+  }, [isSpeaking, stopPlayback]);
+
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      if (audioRef.current) audioRef.current.pause();
     };
   }, []);
 
@@ -108,6 +110,7 @@ export const useAudioSpeech = (voice = 'nova') => {
     audioRef,
     playbackCancelToken,
     stopPlayback,
-    playAudioWithTyping
+    playAudioWithTyping,
+    handleRecordingStart
   };
 }; 

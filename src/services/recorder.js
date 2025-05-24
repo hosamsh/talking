@@ -19,14 +19,18 @@ const MIN_RECORDING_DURATION = 1000;
  */
 export const createAudioRecorder = async () => {
   try {
+    console.log('Creating audio recorder...');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    console.log('Got media stream:', stream.active, 'tracks:', stream.getTracks().length);
+    
     if (!MediaRecorder.isTypeSupported(AUDIO_CONFIG.mimeType)) {
       console.warn(`MIME type ${AUDIO_CONFIG.mimeType} not supported, falling back to default.`);
-      // Potentially try a different MIME type or let the browser decide
       const mediaRecorder = new MediaRecorder(stream);
+      console.log('Created MediaRecorder with default mime type');
       return mediaRecorder;
     }
     const mediaRecorder = new MediaRecorder(stream, { mimeType: AUDIO_CONFIG.mimeType });
+    console.log('Created MediaRecorder with configured mime type');
     return mediaRecorder;
   } catch (error) {
     console.error('Error accessing microphone:', error);
@@ -64,8 +68,13 @@ export const createAudioChunkHandler = (onFinalChunk, onError) => {
    */
   const startRecording = async () => {
     try {
-      if (isRecording) return;
+      console.log('startRecording called, current isRecording:', isRecording);
+      if (isRecording) {
+        console.log('Already recording, ignoring start request');
+        return;
+      }
       
+      console.log('Creating new audio recorder...');
       mediaRecorder = await createAudioRecorder();
       localAudioChunks = [];
       recordingStartTime = Date.now();
@@ -80,6 +89,7 @@ export const createAudioChunkHandler = (onFinalChunk, onError) => {
       mediaRecorder.onstop = () => {
         const recordingDuration = Date.now() - recordingStartTime;
         console.log('MediaRecorder stopped. Duration:', recordingDuration, 'ms. Chunks collected:', localAudioChunks.length);
+        console.log('isRecording state at stop:', isRecording);
         
         if (localAudioChunks.length > 0 && recordingDuration >= MIN_RECORDING_DURATION) {
           const finalBlob = new Blob(localAudioChunks, { type: mediaRecorder.mimeType || AUDIO_CONFIG.mimeType });
@@ -97,20 +107,25 @@ export const createAudioChunkHandler = (onFinalChunk, onError) => {
             mediaRecorder.stream.getTracks().forEach(track => track.stop());
         }
         localAudioChunks = []; // Clear chunks for next recording
+        isRecording = false; // Reset state here too
+        console.log('MediaRecorder cleanup completed, isRecording reset to:', isRecording);
       };
       
       mediaRecorder.onerror = (event) => {
         console.error('MediaRecorder error:', event.error);
+        isRecording = false;
         onError('Error during audio recording: ' + event.error.name + ": " + event.error.message);
       };
       
       // Start recording. The timeslice parameter makes ondataavailable fire periodically.
       // If not specified, it fires only when stop() is called.
+      console.log('About to start MediaRecorder...');
       mediaRecorder.start(); // Let's try without a timeslice first to see if onstop behaves better
       isRecording = true;
-      console.log('MediaRecorder started. Current state:', mediaRecorder.state);
+      console.log('MediaRecorder started. Current state:', mediaRecorder.state, 'isRecording:', isRecording);
     } catch (error) {
       console.error('Error in startRecording:', error);
+      isRecording = false;
       onError(error.message);
     }
   };
@@ -119,6 +134,7 @@ export const createAudioChunkHandler = (onFinalChunk, onError) => {
    * Stop recording audio
    */
   const stopRecording = () => {
+    console.log('stopRecording called. isRecording:', isRecording, 'mediaRecorder exists:', !!mediaRecorder);
     if (!mediaRecorder || !isRecording) {
       console.log('StopRecording called but not recording or no mediaRecorder.');
       return;
@@ -127,8 +143,11 @@ export const createAudioChunkHandler = (onFinalChunk, onError) => {
     console.log('Attempting to stop MediaRecorder. Current state:', mediaRecorder.state);
     if (mediaRecorder.state === 'recording') {
       mediaRecorder.stop(); // This will trigger ondataavailable (if any data) and then onstop
+      console.log('MediaRecorder.stop() called');
+    } else {
+      console.log('MediaRecorder not in recording state:', mediaRecorder.state);
+      isRecording = false; // Reset state even if not recording
     }
-    isRecording = false;
     // Note: stream tracks are now stopped in onstop event to ensure data is processed.
   };
   
@@ -137,7 +156,10 @@ export const createAudioChunkHandler = (onFinalChunk, onError) => {
    * 
    * @returns {boolean} - True if recording, false otherwise
    */
-  const isCurrentlyRecording = () => isRecording;
+  const isCurrentlyRecording = () => {
+    console.log('isCurrentlyRecording called, returning:', isRecording);
+    return isRecording;
+  };
   
   return {
     startRecording,

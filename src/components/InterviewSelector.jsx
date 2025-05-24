@@ -4,23 +4,16 @@ import {
 } from '@mui/material';
 import { interviewTypes } from '../config/interviewPrompts';
 
-const InterviewTypeSelector = ({ onStartInterview, onError }) => {
+const InterviewSelector = ({ onStartInterview, onError }) => {
   const [interviewType, setInterviewType] = useState('');
-
-  const handleInterviewTypeChange = (e) => {
-    setInterviewType(e.target.value);
-  };
 
   const handleStartInterview = () => {
     if (!interviewType) {
       onError('Please select an interview type');
       return;
     }
-    
     onStartInterview(interviewType);
   };
-
-  const selectedType = interviewTypes.find(t => t.id === interviewType);
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -33,7 +26,7 @@ const InterviewTypeSelector = ({ onStartInterview, onError }) => {
         <InputLabel>Interview Type</InputLabel>
         <Select
           value={interviewType}
-          onChange={handleInterviewTypeChange}
+          onChange={(e) => setInterviewType(e.target.value)}
           label="Interview Type"
         >
           {interviewTypes.map(type => (
@@ -44,16 +37,16 @@ const InterviewTypeSelector = ({ onStartInterview, onError }) => {
         </Select>
       </FormControl>
       
-      {selectedType && (
+      {interviewType && (
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6">
-            {selectedType.name}
+            {interviewTypes.find(t => t.id === interviewType)?.name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {selectedType.description}
+            {interviewTypes.find(t => t.id === interviewType)?.description}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Duration: {selectedType.duration}
+            Duration: {interviewTypes.find(t => t.id === interviewType)?.duration}
           </Typography>
         </Box>
       )}
@@ -73,4 +66,4 @@ const InterviewTypeSelector = ({ onStartInterview, onError }) => {
   );
 };
 
-export default InterviewTypeSelector; 
+export default InterviewSelector; 
