@@ -18,7 +18,7 @@ const MIN_RECORDING_DURATION = 1000;
  * @returns {Promise<MediaRecorder>} - Initialized MediaRecorder instance
  */
 export const createAudioRecorder = async () => {
-  const requestId = Math.random().toString(36).substr(2, 9);
+  const requestId = Math.random().toString(36).slice(2, 11);
   const startTime = performance.now();
   
   try {

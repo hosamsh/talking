@@ -3,6 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const axios = require('axios');
 const { AzureOpenAI } = require('openai');
+const { interviewTypes, interviewPrompts } = require('./config/interviews');
 require('dotenv').config();
 
 const app = express();
@@ -43,21 +44,94 @@ app.get('/health', (req, res) => {
     services: {
       llm: !!LLM_DEPLOYMENT,
       tts: !!TTS_DEPLOYMENT,
-      stt: !!STT_DEPLOYMENT
+      stt: !!STT_DEPLOYMENT,
+      interviews: true
     }
   });
 });
 
-// LLM Streaming Endpoint
+// Interview API Endpoints
+
+// Get all available interview types
+app.get('/api/interviews', (req, res) => {
+  const requestId = Math.random().toString(36).slice(2, 11);
+  
+  console.log('📋 BACKEND INTERVIEWS: Getting interview types list', {
+    requestId,
+    interviewTypesCount: interviewTypes.length,
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    data: interviewTypes,
+    count: interviewTypes.length
+  });
+});
+
+// Get specific interview configuration
+app.get('/api/interviews/:interviewId', (req, res) => {
+  const { interviewId } = req.params;
+  const requestId = Math.random().toString(36).slice(2, 11);
+  
+  console.log('📋 BACKEND INTERVIEWS: Getting interview configuration', {
+    requestId,
+    interviewId,
+    timestamp: new Date().toISOString()
+  });
+
+  const interviewType = interviewTypes.find(type => type.id === interviewId);
+  const interviewPrompt = interviewPrompts[interviewId];
+
+  if (!interviewType || !interviewPrompt) {
+    console.error('📋 BACKEND INTERVIEWS: Interview not found', {
+      requestId,
+      interviewId,
+      availableTypes: interviewTypes.map(t => t.id),
+      timestamp: new Date().toISOString()
+    });
+    
+    return res.status(404).json({
+      success: false,
+      error: 'Interview type not found',
+      availableTypes: interviewTypes.map(t => t.id)
+    });
+  }
+
+  console.log('📋 BACKEND INTERVIEWS: Interview configuration found', {
+    requestId,
+    interviewId,
+    hasSystemPrompt: !!interviewPrompt.systemPrompt,
+    hasInitialQuestion: !!interviewPrompt.initialQuestion,
+    followupQuestionsCount: interviewPrompt.followupQuestions?.length || 0,
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    data: {
+      ...interviewType,
+      configuration: {
+        systemPrompt: interviewPrompt.systemPrompt,
+        initialQuestion: interviewPrompt.initialQuestion,
+        followupQuestions: interviewPrompt.followupQuestions
+      }
+    }
+  });
+});
+
+// LLM Streaming Endpoint (updated to handle interview context)
 app.post('/api/llm/stream', async (req, res) => {
-  const { userMessage, previousMessages = [], options = {} } = req.body;
-  const requestId = Math.random().toString(36).substr(2, 9);
+  const { userMessage, previousMessages = [], options = {}, interviewId } = req.body;
+  const requestId = Math.random().toString(36).slice(2, 11);
   const startTime = Date.now();
 
   console.log('🤖 BACKEND LLM: Starting streaming request', {
     requestId,
     userMessageLength: userMessage?.length || 0,
     previousMessagesCount: previousMessages.length,
+    interviewId,
+    hasCustomSystemMessage: !!options.systemMessage,
     timestamp: new Date().toISOString()
   });
 
@@ -74,10 +148,26 @@ app.post('/api/llm/stream', async (req, res) => {
       'Access-Control-Allow-Origin': '*',
     });
 
+    let systemMessage = options.systemMessage;
+    
+    // If interview ID is provided and no custom system message, use interview prompt
+    if (interviewId && !systemMessage) {
+      const interviewPrompt = interviewPrompts[interviewId];
+      if (interviewPrompt) {
+        systemMessage = interviewPrompt.systemPrompt;
+        console.log('🤖 BACKEND LLM: Using interview system prompt', {
+          requestId,
+          interviewId,
+          systemPromptLength: systemMessage.length,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    
     const defaultSystemMessage = "You are a helpful AI assistant having a voice conversation. Keep your responses concise and conversational.";
     
     const messages = [
-      { role: "system", content: options.systemMessage || defaultSystemMessage },
+      { role: "system", content: systemMessage || defaultSystemMessage },
       ...previousMessages.map(msg => ({ role: msg.role, content: msg.text })),
       { role: "user", content: userMessage }
     ];
@@ -105,6 +195,7 @@ app.post('/api/llm/stream', async (req, res) => {
       requestId,
       responseTime: `${Date.now() - startTime}ms`,
       chunksCount: chunkCount,
+      interviewId,
       timestamp: new Date().toISOString()
     });
 
@@ -112,6 +203,7 @@ app.post('/api/llm/stream', async (req, res) => {
     console.error('🤖 BACKEND LLM: Stream failed', {
       requestId,
       error: error.message,
+      interviewId,
       timestamp: new Date().toISOString()
     });
 
@@ -124,7 +216,7 @@ app.post('/api/llm/stream', async (req, res) => {
 // TTS Endpoint
 app.post('/api/tts', async (req, res) => {
   const { text, voice = 'nova' } = req.body;
-  const requestId = Math.random().toString(36).substr(2, 9);
+  const requestId = Math.random().toString(36).slice(2, 11);
   const startTime = Date.now();
 
   console.log('🌐 BACKEND TTS: Starting request', {
@@ -180,7 +272,7 @@ app.post('/api/tts', async (req, res) => {
 
 // STT Endpoint
 app.post('/api/stt', upload.single('audio'), async (req, res) => {
-  const requestId = Math.random().toString(36).substr(2, 9);
+  const requestId = Math.random().toString(36).slice(2, 11);
   const startTime = Date.now();
   const audioFile = req.file;
   const { language = 'en' } = req.body;

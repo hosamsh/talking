@@ -9,7 +9,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001'
  * @returns {Promise<string>} - Transcribed text
  */
 export const transcribeAudio = async (audioBlob, options = {}) => {
-  const requestId = Math.random().toString(36).substr(2, 9);
+  const requestId = Math.random().toString(36).slice(2, 11);
   const startTime = performance.now();
   
   console.log('🎵 STT API: Starting transcription request', {

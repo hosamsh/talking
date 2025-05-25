@@ -36,7 +36,7 @@ export const useTTS = (voice = 'nova') => {
   }, [isSpeaking]);
 
   const playAudioWithTyping = useCallback(async (text, cancelToken, onTextUpdate) => {
-    if (!text.trim()) return;
+    if (!text || !text.trim()) return;
     
     console.log('🔊 PLAY AUDIO: Starting playback', {
       textLength: text.length,

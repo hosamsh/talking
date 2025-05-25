@@ -9,7 +9,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001'
  * @returns {Promise<ArrayBuffer>} - ArrayBuffer containing the audio data
  */
 export const textToSpeech = async (text, voice) => {
-  const requestId = Math.random().toString(36).substr(2, 9);
+  const requestId = Math.random().toString(36).slice(2, 11);
   const startTime = performance.now();
   
   console.log('🌐 TTS API: Starting request', {
@@ -21,7 +21,7 @@ export const textToSpeech = async (text, voice) => {
     timestamp: new Date().toISOString()
   });
 
-  if (!text.trim()) {
+  if (!text || !text.trim()) {
     console.error('🌐 TTS API: Validation error', {
       requestId,
       error: 'Text is required',

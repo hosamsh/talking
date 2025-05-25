@@ -197,7 +197,7 @@ function InterviewPage() {
     
     try {
       console.log('📋 HANDLE START INTERVIEW: Initializing conversation');
-      const initialQuestion = initializeConversation(selectedInterviewType);
+      const initialQuestion = await initializeConversation(selectedInterviewType);
       console.log('📋 HANDLE START INTERVIEW: Initial question received:', {
         initialQuestion,
         length: initialQuestion?.length || 0
@@ -228,9 +228,20 @@ function InterviewPage() {
       console.log('📋 SEND INTERVIEWER MESSAGE: Adding interviewer message placeholder');
       addInterviewerMessage();
       
-      console.log('📋 SEND INTERVIEWER MESSAGE: Generating interviewer response');
-      const assistantText = await generateInterviewerResponse(text, currentInterviewType);
-      console.log('📋 SEND INTERVIEWER MESSAGE: Response generated:', {
+      let assistantText;
+      
+      // Check if this is a direct message (like initial question) or needs LLM generation
+      if (text && !text.includes("Continue the interview") && !text.includes("based on the candidate's response")) {
+        // This is a direct message (like initial question)
+        console.log('📋 SEND INTERVIEWER MESSAGE: Using direct message');
+        assistantText = text;
+      } else {
+        // This needs LLM generation
+        console.log('📋 SEND INTERVIEWER MESSAGE: Generating interviewer response');
+        assistantText = await generateInterviewerResponse(text, currentInterviewType);
+      }
+      
+      console.log('📋 SEND INTERVIEWER MESSAGE: Response ready:', {
         assistantText,
         length: assistantText?.length || 0,
         timestamp: new Date().toISOString()
@@ -261,7 +272,7 @@ function InterviewPage() {
       timestamp: new Date().toISOString()
     });
 
-    if (!userText.trim()) {
+    if (!userText || !userText.trim()) {
       console.log('📋 HANDLE USER RESPONSE: Empty text, returning early');
       return;
     }
