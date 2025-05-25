@@ -18,22 +18,90 @@ const MIN_RECORDING_DURATION = 1000;
  * @returns {Promise<MediaRecorder>} - Initialized MediaRecorder instance
  */
 export const createAudioRecorder = async () => {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  const startTime = performance.now();
+  
   try {
-    console.log('Creating audio recorder...');
+    console.log('🎙️ AUDIO RECORDER: Starting creation', {
+      requestId,
+      userAgent: navigator.userAgent.substring(0, 100),
+      hasMediaDevices: !!navigator.mediaDevices,
+      hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
+      timestamp: new Date().toISOString()
+    });
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    console.log('Got media stream:', stream.active, 'tracks:', stream.getTracks().length);
     
-    if (!MediaRecorder.isTypeSupported(AUDIO_CONFIG.mimeType)) {
-      console.warn(`MIME type ${AUDIO_CONFIG.mimeType} not supported, falling back to default.`);
-      const mediaRecorder = new MediaRecorder(stream);
-      console.log('Created MediaRecorder with default mime type');
-      return mediaRecorder;
+    const audioTracks = stream.getAudioTracks();
+    const track = audioTracks[0];
+    
+    console.log('🎙️ MICROPHONE: Permission granted and stream created', {
+      requestId,
+      streamActive: stream.active,
+      tracksCount: stream.getTracks().length,
+      audioTracksCount: audioTracks.length,
+      trackLabel: track?.label || 'Unknown',
+      trackKind: track?.kind,
+      trackSettings: track?.getSettings ? track.getSettings() : 'Not available',
+      trackCapabilities: track?.getCapabilities ? track.getCapabilities() : 'Not available',
+      timestamp: new Date().toISOString()
+    });
+    
+    const mimeTypeSupported = MediaRecorder.isTypeSupported(AUDIO_CONFIG.mimeType);
+    
+    console.log('🎙️ AUDIO RECORDER: Checking codec support', {
+      requestId,
+      requestedMimeType: AUDIO_CONFIG.mimeType,
+      isSupported: mimeTypeSupported,
+      browserSupport: {
+        mediaRecorder: !!window.MediaRecorder,
+        webAudio: !!window.AudioContext || !!window.webkitAudioContext
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    let mediaRecorder;
+    if (!mimeTypeSupported) {
+      console.warn('🎙️ AUDIO RECORDER: MIME type not supported, using default', {
+        requestId,
+        fallbackMimeType: 'browser default',
+        warning: 'Audio quality may be different than expected'
+      });
+      mediaRecorder = new MediaRecorder(stream);
+    } else {
+      mediaRecorder = new MediaRecorder(stream, { mimeType: AUDIO_CONFIG.mimeType });
     }
-    const mediaRecorder = new MediaRecorder(stream, { mimeType: AUDIO_CONFIG.mimeType });
-    console.log('Created MediaRecorder with configured mime type');
+
+    const endTime = performance.now();
+    
+    console.log('🎙️ AUDIO RECORDER: Created successfully', {
+      requestId,
+      setupTime: `${(endTime - startTime).toFixed(2)}ms`,
+      actualMimeType: mediaRecorder.mimeType,
+      state: mediaRecorder.state,
+      stream: {
+        id: stream.id,
+        active: stream.active,
+        tracks: stream.getTracks().map(t => ({ kind: t.kind, label: t.label, enabled: t.enabled }))
+      },
+      timestamp: new Date().toISOString()
+    });
+    
     return mediaRecorder;
   } catch (error) {
-    console.error('Error accessing microphone:', error);
+    const endTime = performance.now();
+    
+    console.error('🎙️ AUDIO RECORDER: Creation failed', {
+      requestId,
+      setupTime: `${(endTime - startTime).toFixed(2)}ms`,
+      errorType: error.name,
+      errorMessage: error.message,
+      permissionDenied: error.name === 'NotAllowedError',
+      deviceNotFound: error.name === 'NotFoundError',
+      deviceBusy: error.name === 'NotReadableError',
+      timestamp: new Date().toISOString()
+    });
+    
     throw new Error('Could not access microphone. Please ensure you have granted microphone permissions.');
   }
 };

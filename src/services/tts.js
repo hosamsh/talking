@@ -1,57 +1,103 @@
-import axios from 'axios';
-
-// Get values from environment variables
-const AZURE_ENDPOINT = process.env.REACT_APP_AZURE_OPENAI_ENDPOINT;
-const API_VERSION = process.env.REACT_APP_AZURE_OPENAI_API_VERSION;
-const API_KEY = process.env.REACT_APP_AZURE_OPENAI_API_KEY;
-const DEPLOYMENT_NAME = process.env.REACT_APP_AZURE_OPENAI_TTS_DEPLOYMENT;
+// Backend API configuration
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
 
 /**
- * Converts text to speech using Azure OpenAI API
+ * Converts text to speech using Backend TTS API
  * 
  * @param {string} text - The text to convert to speech
  * @param {string} voice - The voice to use (alloy, echo, fable, onyx, nova, shimmer)
  * @returns {Promise<ArrayBuffer>} - ArrayBuffer containing the audio data
  */
 export const textToSpeech = async (text, voice) => {
-  if (!API_KEY) {
-    throw new Error('API key not found in environment variables');
-  }
+  const requestId = Math.random().toString(36).substr(2, 9);
+  const startTime = performance.now();
+  
+  console.log('🌐 TTS API: Starting request', {
+    requestId,
+    textLength: text.length,
+    textPreview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+    voice,
+    backendUrl: BACKEND_URL,
+    timestamp: new Date().toISOString()
+  });
 
   if (!text.trim()) {
+    console.error('🌐 TTS API: Validation error', {
+      requestId,
+      error: 'Text is required',
+      timestamp: new Date().toISOString()
+    });
     throw new Error('Text is required');
   }
 
   try {
-    const response = await axios({
-      method: 'post',
-      url: `${AZURE_ENDPOINT}/openai/deployments/${DEPLOYMENT_NAME}/audio/speech?api-version=${API_VERSION}`,
+    const requestPayload = {
+      text: text,
+      voice: voice
+    };
+
+    console.log('🌐 TTS API: Sending HTTP request', {
+      requestId,
+      url: `${BACKEND_URL}/api/tts`,
+      payloadSize: JSON.stringify(requestPayload).length,
+      timestamp: new Date().toISOString()
+    });
+
+    const response = await fetch(`${BACKEND_URL}/api/tts`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
       },
-      data: {
-        model: `${DEPLOYMENT_NAME}`,
-        input: text,
-        voice: voice
-      },
-      responseType: 'arraybuffer'
+      body: JSON.stringify(requestPayload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Backend request failed: ${response.status} ${response.statusText}`);
+    }
+    
+    const audioData = await response.arrayBuffer();
+    const endTime = performance.now();
+    const responseSize = audioData.byteLength;
+    
+    console.log('🌐 TTS API: Request successful', {
+      requestId,
+      responseTime: `${(endTime - startTime).toFixed(2)}ms`,
+      responseSize: `${(responseSize / 1024).toFixed(2)}KB`,
+      statusCode: response.status,
+      contentType: response.headers.get('content-type'),
+      timestamp: new Date().toISOString()
     });
     
-    return response.data;
+    return audioData;
   } catch (error) {
-    console.error('Error calling Azure TTS:', error);
-    throw new Error(error.message || 'Error calling Azure TTS service');
+    const endTime = performance.now();
+    
+    console.error('🌐 TTS API: Request failed', {
+      requestId,
+      responseTime: `${(endTime - startTime).toFixed(2)}ms`,
+      errorType: error.name,
+      errorMessage: error.message,
+      timestamp: new Date().toISOString()
+    });
+    
+    throw new Error(error.message || 'Error calling backend TTS service');
   }
 };
 
 /**
- * Check if the Azure OpenAI TTS service is configured correctly
+ * Check if the backend TTS service is available
  * 
- * @returns {boolean} - True if the service is configured, false otherwise
+ * @returns {Promise<boolean>} - True if the service is available, false otherwise
  */
-export const isServiceConfigured = () => {
-  return !!(AZURE_ENDPOINT && API_VERSION && API_KEY && DEPLOYMENT_NAME);
+export const isServiceConfigured = async () => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/health`);
+    const data = await response.json();
+    return data.services?.tts || false;
+  } catch (error) {
+    console.error('Backend health check failed:', error);
+    return false;
+  }
 };
 
 /**

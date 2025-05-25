@@ -1,18 +1,18 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import MicIcon from '@mui/icons-material/Mic';
 import StopIcon from '@mui/icons-material/Stop';
 import { createAudioChunkHandler } from '../services/recorder';
 import { transcribeAudio } from '../services/stt';
 
-const VoiceInput = ({ 
+const VoiceInput = forwardRef(({ 
   onTextUpdate, 
   onLoadingChange, 
   onActivityChange, 
   onError,
   onRecordingStart,
   isSpeaking 
-}) => {
+}, ref) => {
   console.log('🎤 VoiceInput COMPONENT RENDER', {
     onTextUpdate: !!onTextUpdate,
     onLoadingChange: !!onLoadingChange,
@@ -222,6 +222,31 @@ const VoiceInput = ({
     hasAudioHandler: !!audioHandler
   });
   
+  // Expose cleanup function through ref
+  useImperativeHandle(ref, () => ({
+    cleanup: async () => {
+      console.log('🎤 CLEANUP: Starting VoiceInput cleanup', {
+        isRecording,
+        hasAudioHandler: !!audioHandler,
+        timestamp: new Date().toISOString()
+      });
+
+      // Stop any ongoing recording
+      if (audioHandler && audioHandler.isRecording()) {
+        console.log('🎤 CLEANUP: Stopping ongoing recording');
+        audioHandler.stopRecording();
+      }
+
+      // Reset component state
+      console.log('🎤 CLEANUP: Resetting component state');
+      setIsRecording(false);
+      onActivityChangeRef.current?.(false);
+      onLoadingChangeRef.current?.(false);
+
+      console.log('🎤 CLEANUP: VoiceInput cleanup completed');
+    }
+  }), [isRecording, audioHandler]);
+  
   return (
     <Box sx={{ display: 'flex', justifyContent: 'center' }}>
       <Tooltip title={isRecording ? "Stop Recording" : isSpeaking ? "Interrupt Speaking" : "Start Recording"}>
@@ -236,6 +261,6 @@ const VoiceInput = ({
       </Tooltip>
     </Box>
   );
-};
+});
 
 export default VoiceInput;

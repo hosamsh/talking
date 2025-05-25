@@ -6,6 +6,7 @@ export const useChat = () => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const conversationRef = useRef([]);
+  const llmCancelTokenRef = useRef(null);
 
   const addUserMessage = useCallback((userText, isInterruption = false) => {
     if (isInterruption) {
@@ -56,7 +57,17 @@ export const useChat = () => {
   }, []);
 
   const generateInterviewerResponse = useCallback(async (text, interviewType) => {
+    console.log('💬 GENERATE RESPONSE: Starting LLM generation', {
+      text,
+      interviewType,
+      timestamp: new Date().toISOString()
+    });
+
     setLoading(true);
+    
+    // Create a new cancel token for this LLM request
+    llmCancelTokenRef.current = { cancelled: false };
+    const cancelToken = llmCancelTokenRef.current;
     
     try {
       let assistantText = '';
@@ -64,25 +75,47 @@ export const useChat = () => {
         systemMessage: interviewPrompts[interviewType].systemPrompt
       };
       
+      console.log('💬 GENERATE RESPONSE: Starting LLM stream');
       for await (const chunk of getLLMResponseStream(text, conversationRef.current, options)) {
+        // Check if operation was cancelled
+        if (cancelToken.cancelled) {
+          console.log('💬 GENERATE RESPONSE: Operation cancelled, breaking stream');
+          throw new Error('Operation cancelled');
+        }
         assistantText += chunk;
       }
       
-      conversationRef.current.push({
-        role: 'assistant',
-        text: assistantText
-      });
-      
-      return assistantText;
+      if (!cancelToken.cancelled) {
+        conversationRef.current.push({
+          role: 'assistant',
+          text: assistantText
+        });
+        console.log('💬 GENERATE RESPONSE: LLM generation completed successfully');
+        return assistantText;
+      } else {
+        console.log('💬 GENERATE RESPONSE: Operation was cancelled after stream completion');
+        throw new Error('Operation cancelled');
+      }
     } catch (err) {
-      console.error('Conversation error:', err);
+      if (cancelToken.cancelled) {
+        console.log('💬 GENERATE RESPONSE: Operation cancelled during generation');
+        throw new Error('Operation cancelled');
+      }
+      console.error('💬 GENERATE RESPONSE: Error occurred:', err);
       throw new Error(err.message || 'Error in interview');
     } finally {
       setLoading(false);
+      // Clear the cancel token
+      llmCancelTokenRef.current = null;
     }
   }, []);
 
   const initializeConversation = useCallback((interviewType) => {
+    console.log('💬 INITIALIZE: Starting new conversation', {
+      interviewType,
+      timestamp: new Date().toISOString()
+    });
+
     setMessages([]);
     conversationRef.current = [];
     
@@ -99,6 +132,30 @@ export const useChat = () => {
     return prompt.initialQuestion;
   }, []);
 
+  const cleanup = useCallback(async () => {
+    console.log('💬 CLEANUP: Starting chat cleanup', {
+      loading,
+      messagesCount: messages.length,
+      hasOngoingLLM: !!llmCancelTokenRef.current,
+      timestamp: new Date().toISOString()
+    });
+
+    // Cancel any ongoing LLM generation
+    if (llmCancelTokenRef.current) {
+      console.log('💬 CLEANUP: Cancelling ongoing LLM generation');
+      llmCancelTokenRef.current.cancelled = true;
+    }
+
+    // Reset all state
+    console.log('💬 CLEANUP: Resetting chat state');
+    setMessages([]);
+    setLoading(false);
+    conversationRef.current = [];
+    llmCancelTokenRef.current = null;
+
+    console.log('💬 CLEANUP: Chat cleanup completed');
+  }, [loading, messages.length]);
+
   return {
     messages,
     loading,
@@ -106,6 +163,7 @@ export const useChat = () => {
     addInterviewerMessage,
     updateLastInterviewerMessage,
     generateInterviewerResponse,
-    initializeConversation
+    initializeConversation,
+    cleanup
   };
 }; 

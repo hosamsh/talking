@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { 
   Container, Paper, Typography, Box, CircularProgress, 
   Alert, Button, Divider
@@ -10,27 +10,76 @@ import { useTTS } from '../hooks/useTTS';
 import { useChat } from '../hooks/useChat';
 
 function InterviewPage() {
+  const componentStartTime = useRef(performance.now());
+  const renderStartTime = useRef(performance.now());
+  
   console.log('📋 InterviewPage COMPONENT RENDER START', {
+    renderTime: `${(performance.now() - renderStartTime.current).toFixed(2)}ms`,
+    totalComponentTime: `${(performance.now() - componentStartTime.current).toFixed(2)}ms`,
     timestamp: new Date().toISOString()
   });
 
   const renderCountRef = useRef(0);
+  const voiceInputRef = useRef(null);
+  const lastStateChangeRef = useRef({ timestamp: Date.now(), reason: 'initial' });
   
-  // Track every render cycle
+  // Track every render cycle with performance data
   useEffect(() => {
     renderCountRef.current += 1;
-    console.log('📋 RENDER CYCLE:', renderCountRef.current, 'at', new Date().toISOString());
+    const renderEndTime = performance.now();
+    const renderDuration = renderEndTime - renderStartTime.current;
+    
+    console.log('📋 RENDER CYCLE:', renderCountRef.current, {
+      renderDuration: `${renderDuration.toFixed(2)}ms`,
+      timeSinceLastStateChange: `${(Date.now() - lastStateChangeRef.current.timestamp)}ms`,
+      lastChangeReason: lastStateChangeRef.current.reason,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (renderDuration > 16) { // More than one frame at 60fps
+      console.warn('📋 SLOW RENDER:', {
+        renderCycle: renderCountRef.current,
+        renderDuration: `${renderDuration.toFixed(2)}ms`,
+        warning: 'Render took longer than 16ms (60fps threshold)'
+      });
+    }
+    
+    renderStartTime.current = performance.now();
   });
 
   const [interviewType, setInterviewType] = useState('');
   const [interviewStarted, setInterviewStarted] = useState(false);
   const [error, setError] = useState('');
 
-  console.log('📋 InterviewPage STATE VALUES:', {
+  // Track state changes with reasons
+  const trackStateChange = useCallback((reason) => {
+    lastStateChangeRef.current = { timestamp: Date.now(), reason };
+  }, []);
+
+  // Optimized state setters that track reasons
+  const setInterviewTypeTracked = useCallback((value) => {
+    setInterviewType(value);
+    trackStateChange('interviewType changed');
+  }, [trackStateChange]);
+
+  const setInterviewStartedTracked = useCallback((value) => {
+    setInterviewStarted(value);
+    trackStateChange('interviewStarted changed');
+  }, [trackStateChange]);
+
+  const setErrorTracked = useCallback((value) => {
+    setError(value);
+    trackStateChange('error changed');
+  }, [trackStateChange]);
+
+  // Memoize state values to prevent unnecessary re-renders
+  const stateSnapshot = useMemo(() => ({
     interviewType,
     interviewStarted,
-    error: !!error
-  });
+    hasError: !!error
+  }), [interviewType, interviewStarted, error]);
+
+  console.log('📋 InterviewPage STATE VALUES:', stateSnapshot);
 
   console.log('📋 InterviewPage: Calling useTTS hook');
   const { 
@@ -38,7 +87,8 @@ function InterviewPage() {
     audioRef, 
     playbackCancelToken, 
     stopPlayback, 
-    playAudioWithTyping 
+    playAudioWithTyping,
+    cleanup: ttsCleanup 
   } = useTTS('nova');
 
   console.log('📋 InterviewPage: useTTS hook result:', {
@@ -46,7 +96,8 @@ function InterviewPage() {
     hasAudioRef: !!audioRef,
     hasPlaybackCancelToken: !!playbackCancelToken,
     hasStopPlayback: !!stopPlayback,
-    hasPlayAudioWithTyping: !!playAudioWithTyping
+    hasPlayAudioWithTyping: !!playAudioWithTyping,
+    hasTtsCleanup: !!ttsCleanup
   });
 
   console.log('📋 InterviewPage: Calling useChat hook');
@@ -57,7 +108,8 @@ function InterviewPage() {
     addInterviewerMessage,
     updateLastInterviewerMessage,
     generateInterviewerResponse,
-    initializeConversation
+    initializeConversation,
+    cleanup: chatCleanup
   } = useChat();
 
   console.log('📋 InterviewPage: useChat hook result:', {
@@ -67,23 +119,81 @@ function InterviewPage() {
     hasAddInterviewerMessage: !!addInterviewerMessage,
     hasUpdateLastInterviewerMessage: !!updateLastInterviewerMessage,
     hasGenerateInterviewerResponse: !!generateInterviewerResponse,
-    hasInitializeConversation: !!initializeConversation
+    hasInitializeConversation: !!initializeConversation,
+    hasChatCleanup: !!chatCleanup
   });
+
+  const handleEndInterview = useCallback(async () => {
+    console.log('📋 END INTERVIEW: Starting comprehensive cleanup', {
+      interviewStarted,
+      isSpeaking,
+      loading,
+      messagesCount: messages.length,
+      memoryUsage: performance.memory ? {
+        used: `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
+        total: `${(performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`
+      } : 'Not available',
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      // 1. Stop TTS and audio playback
+      console.log('📋 END INTERVIEW: Cleaning up TTS and audio');
+      await ttsCleanup();
+
+      // 2. Stop chat/LLM operations
+      console.log('📋 END INTERVIEW: Cleaning up chat and LLM');
+      await chatCleanup();
+
+      // 3. Stop voice input/recording
+      console.log('📋 END INTERVIEW: Cleaning up voice input');
+      if (voiceInputRef.current?.cleanup) {
+        await voiceInputRef.current.cleanup();
+      }
+
+      // 4. Reset page state
+      console.log('📋 END INTERVIEW: Resetting page state');
+      setInterviewStartedTracked(false);
+      setInterviewTypeTracked('');
+      setErrorTracked('');
+
+      console.log('📋 END INTERVIEW: Comprehensive cleanup completed successfully', {
+        finalMemoryUsage: performance.memory ? {
+          used: `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
+          total: `${(performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`
+        } : 'Not available'
+      });
+    } catch (error) {
+      console.error('📋 END INTERVIEW: Error during cleanup:', {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
+      // Still set interview as ended even if cleanup fails
+      setInterviewStartedTracked(false);
+      setErrorTracked('Interview ended, but some cleanup may have failed');
+    }
+  }, [interviewStarted, isSpeaking, loading, messages.length, ttsCleanup, chatCleanup, setInterviewStartedTracked, setInterviewTypeTracked, setErrorTracked]);
 
   const handleStartInterview = async (selectedInterviewType) => {
     console.log('📋 HANDLE START INTERVIEW: Called with:', {
       selectedInterviewType,
+      memoryUsage: performance.memory ? {
+        used: `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
+        total: `${(performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
+        limit: `${(performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2)}MB`
+      } : 'Not available',
       timestamp: new Date().toISOString()
     });
 
     console.log('📋 HANDLE START INTERVIEW: Setting interview type');
-    setInterviewType(selectedInterviewType);
+    setInterviewTypeTracked(selectedInterviewType);
     
     console.log('📋 HANDLE START INTERVIEW: Setting interview started to true');
-    setInterviewStarted(true);
+    setInterviewStartedTracked(true);
     
     console.log('📋 HANDLE START INTERVIEW: Clearing error');
-    setError('');
+    setErrorTracked('');
     
     try {
       console.log('📋 HANDLE START INTERVIEW: Initializing conversation');
@@ -102,7 +212,7 @@ function InterviewPage() {
         stack: err.stack,
         timestamp: new Date().toISOString()
       });
-      setError(err.message);
+      setErrorTracked(err.message);
     }
   };
 
@@ -138,7 +248,7 @@ function InterviewPage() {
         stack: err.stack,
         timestamp: new Date().toISOString()
       });
-      setError(err.message || 'Error in interview');
+      setErrorTracked(err.message || 'Error in interview');
     }
   };
 
@@ -183,6 +293,23 @@ function InterviewPage() {
       console.log('📋 HANDLE RECORDING START: Not currently speaking, no action needed');
     }
   }, [isSpeaking, stopPlayback]);
+
+  // Cleanup effect for component unmount or when interview ends
+  useEffect(() => {
+    return () => {
+      console.log('📋 COMPONENT CLEANUP: InterviewPage unmounting, performing emergency cleanup');
+      // Emergency cleanup - don't await since this is in cleanup
+      if (ttsCleanup) {
+        ttsCleanup().catch(err => console.error('📋 COMPONENT CLEANUP: TTS cleanup error:', err));
+      }
+      if (chatCleanup) {
+        chatCleanup().catch(err => console.error('📋 COMPONENT CLEANUP: Chat cleanup error:', err));
+      }
+      if (voiceInputRef.current?.cleanup) {
+        voiceInputRef.current.cleanup().catch(err => console.error('📋 COMPONENT CLEANUP: Voice input cleanup error:', err));
+      }
+    };
+  }, []); // Empty dependencies - only run on actual unmount
 
   console.log('📋 InterviewPage RENDER: About to render UI', {
     interviewStarted,
@@ -241,6 +368,7 @@ function InterviewPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                 {console.log('📋 InterviewPage RENDER: Rendering VoiceInput component')}
                 <VoiceInput
+                  ref={voiceInputRef}
                   onTextUpdate={(text) => {
                     console.log('📋 VOICE INPUT CALLBACK: onTextUpdate called with:', {
                       text,
@@ -258,7 +386,7 @@ function InterviewPage() {
                   }}
                   onError={(error) => {
                     console.log('📋 VOICE INPUT CALLBACK: onError called with:', error);
-                    setError(error);
+                    setErrorTracked(error);
                   }}
                   onRecordingStart={handleRecordingStart}
                   isSpeaking={isSpeaking}
@@ -272,10 +400,7 @@ function InterviewPage() {
               <Button 
                 variant="outlined" 
                 color="secondary"
-                onClick={() => {
-                  console.log('📋 END INTERVIEW: Button clicked');
-                  setInterviewStarted(false);
-                }}
+                onClick={handleEndInterview}
               >
                 End Interview
               </Button>
@@ -285,18 +410,20 @@ function InterviewPage() {
         
         <audio ref={audioRef} style={{ display: 'none' }} />
         
-        <style jsx global>{`
-          @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-          }
-          
-          @keyframes pulse {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
-          }
-        `}</style>
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes blink {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0; }
+            }
+            
+            @keyframes pulse {
+              0% { opacity: 0.5; }
+              50% { opacity: 1; }
+              100% { opacity: 0.5; }
+            }
+          `
+        }} />
       </Paper>
     </Container>
   );
