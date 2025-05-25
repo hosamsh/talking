@@ -2,110 +2,111 @@
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
 
 /**
- * Streams responses from Backend LLM API
+ * Get streaming LLM response using backend session history
  * 
- * @param {string} userMessage - The user message to send to the LLM
- * @param {array} previousMessages - Optional array of previous messages for context
- * @param {object} options - Optional configuration for the LLM request
- * @param {string} interviewId - Optional interview ID for server-side prompt handling
- * @yields {string} - Chunks of the response text
+ * @param {string} userMessage - The user's message
+ * @param {string} sessionId - The session ID for backend history
+ * @param {Object} options - LLM options (maxTokens, temperature, etc.)
+ * @param {string} interviewId - The interview type ID for context
+ * @returns {AsyncGenerator} - Async generator yielding response chunks
  */
-export async function* getLLMResponseStream(userMessage, previousMessages = [], options = {}, interviewId = null) {
+export async function* getLLMResponseStream(userMessage, sessionId, options = {}, interviewId = null) {
   const requestId = Math.random().toString(36).slice(2, 11);
   const startTime = performance.now();
-  let chunkCount = 0;
-  let totalTokens = 0;
-  let lastChunkTime = startTime;
   
   console.log('🤖 LLM API: Starting streaming request', {
     requestId,
-    userMessageLength: userMessage.length,
-    userMessagePreview: userMessage.substring(0, 100) + (userMessage.length > 100 ? '...' : ''),
-    previousMessagesCount: previousMessages.length,
-    systemMessageLength: options.systemMessage?.length || 0,
+    userMessageLength: userMessage?.length || 0,
+    userMessagePreview: userMessage?.substring(0, 50) + (userMessage?.length > 50 ? '...' : ''),
+    sessionId,
+    systemMessageLength: 0, // Backend handles system message
+    options,
     interviewId,
-    maxTokens: options.maxTokens || 300,
-    temperature: options.temperature || 0.7,
     backendUrl: BACKEND_URL,
     timestamp: new Date().toISOString()
   });
 
-  if (!userMessage) {
-    console.error('🤖 LLM API: Validation error', {
-      requestId,
-      error: 'User message is required',
-      timestamp: new Date().toISOString()
-    });
+  if (!userMessage || !userMessage.trim()) {
     throw new Error('User message is required');
   }
 
+  if (!sessionId) {
+    throw new Error('Session ID is required');
+  }
+
   try {
+    const requestPayload = {
+      userMessage: userMessage.trim(),
+      sessionId,
+      options,
+      interviewId
+    };
+
     console.log('🤖 LLM API: Sending request to backend', {
       requestId,
       url: `${BACKEND_URL}/api/llm/stream`,
+      sessionId,
       hasInterviewId: !!interviewId,
       timestamp: new Date().toISOString()
     });
-
-    const requestBody = {
-      userMessage,
-      previousMessages,
-      options
-    };
-
-    // Add interview ID if provided
-    if (interviewId) {
-      requestBody.interviewId = interviewId;
-    }
 
     const response = await fetch(`${BACKEND_URL}/api/llm/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestPayload)
     });
 
     if (!response.ok) {
       throw new Error(`Backend request failed: ${response.status} ${response.statusText}`);
     }
 
+    if (!response.body) {
+      throw new Error('Response body is not available for streaming');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
     console.log('🤖 LLM API: Stream started, processing chunks', {
       requestId,
       streamStartTime: `${(performance.now() - startTime).toFixed(2)}ms`,
+      sessionId,
       interviewId,
       timestamp: new Date().toISOString()
     });
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      if (done) break;
-      
-      const chunk = decoder.decode(value, { stream: true });
-      
-      if (chunk) {
-        chunkCount++;
-        totalTokens += chunk.length;
-        const currentTime = performance.now();
+    let chunkNumber = 0;
+    let lastChunkTime = performance.now();
+    
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
         
-        console.log('🤖 LLM STREAM: Chunk received', {
-          requestId,
-          chunkNumber: chunkCount,
-          chunkLength: chunk.length,
-          chunkPreview: chunk.substring(0, 50) + (chunk.length > 50 ? '...' : ''),
-          timeSinceLastChunk: `${(currentTime - lastChunkTime).toFixed(2)}ms`,
-          totalResponseTime: `${(currentTime - startTime).toFixed(2)}ms`,
-          interviewId,
-          timestamp: new Date().toISOString()
-        });
+        if (done) break;
         
-        lastChunkTime = currentTime;
-        yield chunk;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk) {
+          chunkNumber++;
+          const currentTime = performance.now();
+          
+          console.log('🤖 LLM STREAM: Chunk received', {
+            requestId,
+            chunkNumber,
+            chunkLength: chunk.length,
+            chunkPreview: chunk.substring(0, 50) + (chunk.length > 50 ? '...' : ''),
+            timeSinceLastChunk: `${(currentTime - lastChunkTime).toFixed(2)}ms`,
+            totalTime: `${(currentTime - startTime).toFixed(2)}ms`,
+            timestamp: new Date().toISOString()
+          });
+          
+          lastChunkTime = currentTime;
+          yield chunk;
+        }
       }
+    } finally {
+      reader.releaseLock();
     }
 
     const endTime = performance.now();
@@ -113,9 +114,10 @@ export async function* getLLMResponseStream(userMessage, previousMessages = [], 
     console.log('🤖 LLM API: Stream completed successfully', {
       requestId,
       totalResponseTime: `${(endTime - startTime).toFixed(2)}ms`,
-      totalChunks: chunkCount,
-      estimatedTokens: Math.ceil(totalTokens / 4),
-      averageChunkTime: chunkCount > 0 ? `${((endTime - startTime) / chunkCount).toFixed(2)}ms` : '0ms',
+      totalChunks: chunkNumber,
+      estimatedTokens: chunkNumber * 4, // Rough estimate
+      averageChunkTime: chunkNumber > 0 ? `${((endTime - startTime) / chunkNumber).toFixed(2)}ms` : '0ms',
+      sessionId,
       interviewId,
       timestamp: new Date().toISOString()
     });
@@ -126,15 +128,14 @@ export async function* getLLMResponseStream(userMessage, previousMessages = [], 
     console.error('🤖 LLM API: Stream failed', {
       requestId,
       responseTime: `${(endTime - startTime).toFixed(2)}ms`,
-      chunksReceived: chunkCount,
       errorType: error.name,
       errorMessage: error.message,
-      errorStack: error.stack?.substring(0, 500),
+      sessionId,
       interviewId,
       timestamp: new Date().toISOString()
     });
     
-    throw new Error(error.message || 'Error communicating with backend LLM service');
+    throw new Error(error.message || 'Error calling backend LLM service');
   }
 }
 

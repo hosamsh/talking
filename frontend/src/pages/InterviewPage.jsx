@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   Container, Paper, Typography, Box, CircularProgress, 
   Alert, Button, Divider
@@ -10,78 +10,12 @@ import { useTTS } from '../hooks/useTTS';
 import { useChat } from '../hooks/useChat';
 
 function InterviewPage() {
-  const componentStartTime = useRef(performance.now());
-  const renderStartTime = useRef(performance.now());
-  
-  console.log('📋 InterviewPage COMPONENT RENDER START', {
-    renderTime: `${(performance.now() - renderStartTime.current).toFixed(2)}ms`,
-    totalComponentTime: `${(performance.now() - componentStartTime.current).toFixed(2)}ms`,
-    timestamp: new Date().toISOString()
-  });
-
-  const renderCountRef = useRef(0);
   const voiceInputRef = useRef(null);
-  const lastStateChangeRef = useRef({ timestamp: Date.now(), reason: 'initial' });
   
-  // Track every render cycle with performance data
-  useEffect(() => {
-    renderCountRef.current += 1;
-    const renderEndTime = performance.now();
-    const renderDuration = renderEndTime - renderStartTime.current;
-    
-    console.log('📋 RENDER CYCLE:', renderCountRef.current, {
-      renderDuration: `${renderDuration.toFixed(2)}ms`,
-      timeSinceLastStateChange: `${(Date.now() - lastStateChangeRef.current.timestamp)}ms`,
-      lastChangeReason: lastStateChangeRef.current.reason,
-      timestamp: new Date().toISOString()
-    });
-    
-    if (renderDuration > 16) { // More than one frame at 60fps
-      console.warn('📋 SLOW RENDER:', {
-        renderCycle: renderCountRef.current,
-        renderDuration: `${renderDuration.toFixed(2)}ms`,
-        warning: 'Render took longer than 16ms (60fps threshold)'
-      });
-    }
-    
-    renderStartTime.current = performance.now();
-  });
-
   const [interviewType, setInterviewType] = useState('');
   const [interviewStarted, setInterviewStarted] = useState(false);
   const [error, setError] = useState('');
 
-  // Track state changes with reasons
-  const trackStateChange = useCallback((reason) => {
-    lastStateChangeRef.current = { timestamp: Date.now(), reason };
-  }, []);
-
-  // Optimized state setters that track reasons
-  const setInterviewTypeTracked = useCallback((value) => {
-    setInterviewType(value);
-    trackStateChange('interviewType changed');
-  }, [trackStateChange]);
-
-  const setInterviewStartedTracked = useCallback((value) => {
-    setInterviewStarted(value);
-    trackStateChange('interviewStarted changed');
-  }, [trackStateChange]);
-
-  const setErrorTracked = useCallback((value) => {
-    setError(value);
-    trackStateChange('error changed');
-  }, [trackStateChange]);
-
-  // Memoize state values to prevent unnecessary re-renders
-  const stateSnapshot = useMemo(() => ({
-    interviewType,
-    interviewStarted,
-    hasError: !!error
-  }), [interviewType, interviewStarted, error]);
-
-  console.log('📋 InterviewPage STATE VALUES:', stateSnapshot);
-
-  console.log('📋 InterviewPage: Calling useTTS hook');
   const { 
     isSpeaking, 
     audioRef, 
@@ -91,16 +25,6 @@ function InterviewPage() {
     cleanup: ttsCleanup 
   } = useTTS('nova');
 
-  console.log('📋 InterviewPage: useTTS hook result:', {
-    isSpeaking,
-    hasAudioRef: !!audioRef,
-    hasPlaybackCancelToken: !!playbackCancelToken,
-    hasStopPlayback: !!stopPlayback,
-    hasPlayAudioWithTyping: !!playAudioWithTyping,
-    hasTtsCleanup: !!ttsCleanup
-  });
-
-  console.log('📋 InterviewPage: Calling useChat hook');
   const {
     messages,
     loading,
@@ -112,225 +36,140 @@ function InterviewPage() {
     cleanup: chatCleanup
   } = useChat();
 
-  console.log('📋 InterviewPage: useChat hook result:', {
-    messagesCount: messages.length,
-    loading,
-    hasAddUserMessage: !!addUserMessage,
-    hasAddInterviewerMessage: !!addInterviewerMessage,
-    hasUpdateLastInterviewerMessage: !!updateLastInterviewerMessage,
-    hasGenerateInterviewerResponse: !!generateInterviewerResponse,
-    hasInitializeConversation: !!initializeConversation,
-    hasChatCleanup: !!chatCleanup
-  });
-
   const handleEndInterview = useCallback(async () => {
-    console.log('📋 END INTERVIEW: Starting comprehensive cleanup', {
-      interviewStarted,
-      isSpeaking,
-      loading,
-      messagesCount: messages.length,
-      memoryUsage: performance.memory ? {
-        used: `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
-        total: `${(performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`
-      } : 'Not available',
-      timestamp: new Date().toISOString()
-    });
-
     try {
       // 1. Stop TTS and audio playback
-      console.log('📋 END INTERVIEW: Cleaning up TTS and audio');
       await ttsCleanup();
 
       // 2. Stop chat/LLM operations
-      console.log('📋 END INTERVIEW: Cleaning up chat and LLM');
       await chatCleanup();
 
       // 3. Stop voice input/recording
-      console.log('📋 END INTERVIEW: Cleaning up voice input');
       if (voiceInputRef.current?.cleanup) {
         await voiceInputRef.current.cleanup();
       }
 
       // 4. Reset page state
-      console.log('📋 END INTERVIEW: Resetting page state');
-      setInterviewStartedTracked(false);
-      setInterviewTypeTracked('');
-      setErrorTracked('');
-
-      console.log('📋 END INTERVIEW: Comprehensive cleanup completed successfully', {
-        finalMemoryUsage: performance.memory ? {
-          used: `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
-          total: `${(performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`
-        } : 'Not available'
-      });
+      setInterviewStarted(false);
+      setInterviewType('');
+      setError('');
     } catch (error) {
-      console.error('📋 END INTERVIEW: Error during cleanup:', {
-        message: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      });
-      // Still set interview as ended even if cleanup fails
-      setInterviewStartedTracked(false);
-      setErrorTracked('Interview ended, but some cleanup may have failed');
+      setInterviewStarted(false);
+      setError('Interview ended, but some cleanup may have failed');
     }
-  }, [interviewStarted, isSpeaking, loading, messages.length, ttsCleanup, chatCleanup, setInterviewStartedTracked, setInterviewTypeTracked, setErrorTracked]);
+  }, [ttsCleanup, chatCleanup, setInterviewStarted, setInterviewType, setError]);
 
   const handleStartInterview = async (selectedInterviewType) => {
-    console.log('📋 HANDLE START INTERVIEW: Called with:', {
-      selectedInterviewType,
-      memoryUsage: performance.memory ? {
-        used: `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
-        total: `${(performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
-        limit: `${(performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2)}MB`
-      } : 'Not available',
-      timestamp: new Date().toISOString()
-    });
-
-    console.log('📋 HANDLE START INTERVIEW: Setting interview type');
-    setInterviewTypeTracked(selectedInterviewType);
+    console.log('🚀 HANDLE START INTERVIEW: Function called', { selectedInterviewType });
     
-    console.log('📋 HANDLE START INTERVIEW: Setting interview started to true');
-    setInterviewStartedTracked(true);
+    setInterviewType(selectedInterviewType);
     
-    console.log('📋 HANDLE START INTERVIEW: Clearing error');
-    setErrorTracked('');
+    setInterviewStarted(true);
+    
+    setError('');
     
     try {
-      console.log('📋 HANDLE START INTERVIEW: Initializing conversation');
+      console.log('🚀 HANDLE START INTERVIEW: Calling initializeConversation');
       const initialQuestion = await initializeConversation(selectedInterviewType);
-      console.log('📋 HANDLE START INTERVIEW: Initial question received:', {
-        initialQuestion,
-        length: initialQuestion?.length || 0
-      });
       
-      console.log('📋 HANDLE START INTERVIEW: Sending initial interviewer message');
+      console.log('🚀 HANDLE START INTERVIEW: Got initial question, calling sendInterviewerMessage');
       await sendInterviewerMessage(initialQuestion, selectedInterviewType);
-      console.log('📋 HANDLE START INTERVIEW: Initial message sent successfully');
+      
+      console.log('🚀 HANDLE START INTERVIEW: Successfully completed');
     } catch (err) {
-      console.error('📋 HANDLE START INTERVIEW: Error occurred:', {
-        message: err.message,
-        stack: err.stack,
-        timestamp: new Date().toISOString()
-      });
-      setErrorTracked(err.message);
+      console.error('🚀 HANDLE START INTERVIEW: Error occurred', err);
+      setError(err.message);
     }
   };
 
   const sendInterviewerMessage = async (text, currentInterviewType = interviewType) => {
-    console.log('📋 SEND INTERVIEWER MESSAGE: Called with:', {
-      text,
-      textLength: text?.length || 0,
-      currentInterviewType,
-      timestamp: new Date().toISOString()
-    });
-
+    console.log('📤 SEND INTERVIEWER MESSAGE: Called with', { text, currentInterviewType });
+    
     try {
-      console.log('📋 SEND INTERVIEWER MESSAGE: Adding interviewer message placeholder');
+      console.log('📤 SEND INTERVIEWER MESSAGE: Adding interviewer message placeholder');
       addInterviewerMessage();
       
       let assistantText;
       
       // Check if this is a direct message (like initial question) or needs LLM generation
       if (text && !text.includes("Continue the interview") && !text.includes("based on the candidate's response")) {
+        console.log('📤 SEND INTERVIEWER MESSAGE: Using direct message (no LLM needed)');
         // This is a direct message (like initial question)
-        console.log('📋 SEND INTERVIEWER MESSAGE: Using direct message');
         assistantText = text;
       } else {
+        console.log('📤 SEND INTERVIEWER MESSAGE: Generating LLM response');
         // This needs LLM generation
-        console.log('📋 SEND INTERVIEWER MESSAGE: Generating interviewer response');
-        assistantText = await generateInterviewerResponse(text, currentInterviewType);
+        assistantText = await generateInterviewerResponse(text);
+        console.log('📤 SEND INTERVIEWER MESSAGE: LLM response received', { assistantText });
       }
       
-      console.log('📋 SEND INTERVIEWER MESSAGE: Response ready:', {
-        assistantText,
-        length: assistantText?.length || 0,
-        timestamp: new Date().toISOString()
-      });
-      
-      console.log('📋 SEND INTERVIEWER MESSAGE: Setting up playback cancel token');
       playbackCancelToken.current = { cancelled: false };
       
-      console.log('📋 SEND INTERVIEWER MESSAGE: Starting audio playback with typing effect');
-      await playAudioWithTyping(assistantText, playbackCancelToken.current, updateLastInterviewerMessage);
-      console.log('📋 SEND INTERVIEWER MESSAGE: Audio playback completed');
+      // Create async wrapper for updateLastInterviewerMessage
+      const asyncUpdateMessage = async (text) => {
+        try {
+          await updateLastInterviewerMessage(text);
+        } catch (error) {
+          // Don't throw - let the UI update continue even if session update fails
+        }
+      };
+      
+      console.log('📤 SEND INTERVIEWER MESSAGE: Starting audio playback');
+      await playAudioWithTyping(assistantText, playbackCancelToken.current, asyncUpdateMessage);
+      console.log('📤 SEND INTERVIEWER MESSAGE: Audio playback completed');
     } catch (err) {
-      console.error('📋 SEND INTERVIEWER MESSAGE: Error occurred:', {
-        message: err.message,
-        stack: err.stack,
-        timestamp: new Date().toISOString()
-      });
-      setErrorTracked(err.message || 'Error in interview');
+      console.error('📤 SEND INTERVIEWER MESSAGE: Error occurred', err);
+      setError(err.message || 'Error in interview');
     }
   };
 
   const handleUserResponse = async (userText, isInterruption = false) => {
-    console.log('📋 HANDLE USER RESPONSE: Called with:', {
-      userText,
-      userTextLength: userText?.length || 0,
-      isInterruption,
-      trimmedText: userText?.trim(),
-      timestamp: new Date().toISOString()
-    });
-
+    console.log('🎯 HANDLE USER RESPONSE: Called with', { userText, isInterruption });
+    
     if (!userText || !userText.trim()) {
-      console.log('📋 HANDLE USER RESPONSE: Empty text, returning early');
+      console.log('🎯 HANDLE USER RESPONSE: Empty text, returning early');
       return;
     }
     
     if (isInterruption) {
-      console.log('📋 HANDLE USER RESPONSE: This is an interruption, stopping playback');
+      console.log('🎯 HANDLE USER RESPONSE: Stopping playback due to interruption');
       stopPlayback();
     }
     
-    console.log('📋 HANDLE USER RESPONSE: Adding user message to conversation');
-    addUserMessage(userText, isInterruption);
-    
-    console.log('📋 HANDLE USER RESPONSE: Sending follow-up interviewer message');
-    await sendInterviewerMessage("Continue the interview based on the candidate's response.");
-    console.log('📋 HANDLE USER RESPONSE: Follow-up message sent');
+    try {
+      console.log('🎯 HANDLE USER RESPONSE: Adding user message to chat');
+      await addUserMessage(userText, isInterruption);
+      
+      console.log('🎯 HANDLE USER RESPONSE: Calling sendInterviewerMessage');
+      await sendInterviewerMessage("Continue the interview based on the candidate's response.");
+      
+      console.log('🎯 HANDLE USER RESPONSE: Successfully completed');
+    } catch (error) {
+      console.error('🎯 HANDLE USER RESPONSE: Error occurred', error);
+      setError(`Error processing your response: ${error.message}`);
+    }
   };
 
   const handleRecordingStart = useCallback(async () => {
-    console.log('📋 HANDLE RECORDING START: Called', {
-      isSpeaking,
-      timestamp: new Date().toISOString()
-    });
-
     if (isSpeaking) {
-      console.log('📋 HANDLE RECORDING START: Currently speaking, stopping playback');
       await stopPlayback();
-      console.log('📋 HANDLE RECORDING START: Playback stopped');
-    } else {
-      console.log('📋 HANDLE RECORDING START: Not currently speaking, no action needed');
     }
   }, [isSpeaking, stopPlayback]);
 
-  // Cleanup effect for component unmount or when interview ends
+  // Cleanup effect for component unmount only
   useEffect(() => {
     return () => {
-      console.log('📋 COMPONENT CLEANUP: InterviewPage unmounting, performing emergency cleanup');
-      // Emergency cleanup - don't await since this is in cleanup
       if (ttsCleanup) {
-        ttsCleanup().catch(err => console.error('📋 COMPONENT CLEANUP: TTS cleanup error:', err));
+        ttsCleanup().catch(err => console.error('TTS cleanup error:', err));
       }
       if (chatCleanup) {
-        chatCleanup().catch(err => console.error('📋 COMPONENT CLEANUP: Chat cleanup error:', err));
+        chatCleanup().catch(err => console.error('Chat cleanup error:', err));
       }
       if (voiceInputRef.current?.cleanup) {
-        voiceInputRef.current.cleanup().catch(err => console.error('📋 COMPONENT CLEANUP: Voice input cleanup error:', err));
+        voiceInputRef.current.cleanup().catch(err => console.error('Voice input cleanup error:', err));
       }
     };
-  }, []); // Empty dependencies - only run on actual unmount
-
-  console.log('📋 InterviewPage RENDER: About to render UI', {
-    interviewStarted,
-    interviewType,
-    hasError: !!error,
-    messagesCount: messages.length,
-    loading,
-    isSpeaking,
-    timestamp: new Date().toISOString()
-  });
+  }, []); // Empty dependency array - only run on mount/unmount
 
   return (
     <Container maxWidth="md" sx={{ mt: 5 }}>
@@ -342,62 +181,45 @@ function InterviewPage() {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         
         {!interviewStarted ? (
-          <>
-            {console.log('📋 InterviewPage RENDER: Rendering InterviewSelector')}
-            <InterviewSelector 
-              onStartInterview={handleStartInterview}
-              onError={setError}
-            />
-          </>
+          <InterviewSelector 
+            onStartInterview={handleStartInterview}
+            onError={setError}
+          />
         ) : (
           <>
-            {console.log('📋 InterviewPage RENDER: Rendering interview interface')}
             <ChatDisplay messages={messages} isSpeaking={isSpeaking} />
             
             <Box sx={{ mb: 2 }}>
               <Box sx={{ mb: 2, textAlign: 'center', color: 'text.secondary', fontSize: '0.875rem' }}>
                 {loading ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {console.log('📋 InterviewPage RENDER: Showing loading state')}
                     Thinking...
                     <CircularProgress size={16} sx={{ ml: 1 }} />
                   </Box>
                 ) : isSpeaking ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {console.log('📋 InterviewPage RENDER: Showing speaking state')}
                     Speaking... (Click mic to interrupt)
                     <CircularProgress size={16} sx={{ ml: 1 }} />
                   </Box>
                 ) : (
                   <>
-                    {console.log('📋 InterviewPage RENDER: Showing ready state')}
                     Your turn to speak. Click the microphone and respond to the interview question.
                   </>
                 )}
               </Box>
               
               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                {console.log('📋 InterviewPage RENDER: Rendering VoiceInput component')}
                 <VoiceInput
                   ref={voiceInputRef}
                   onTextUpdate={(text) => {
-                    console.log('📋 VOICE INPUT CALLBACK: onTextUpdate called with:', {
-                      text,
-                      textLength: text?.length || 0,
-                      isSpeaking,
-                      timestamp: new Date().toISOString()
-                    });
                     handleUserResponse(text, isSpeaking);
                   }}
                   onLoadingChange={(loading) => {
-                    console.log('📋 VOICE INPUT CALLBACK: onLoadingChange called with:', loading);
                   }}
                   onActivityChange={(active) => {
-                    console.log('📋 VOICE INPUT CALLBACK: onActivityChange called with:', active);
                   }}
                   onError={(error) => {
-                    console.log('📋 VOICE INPUT CALLBACK: onError called with:', error);
-                    setErrorTracked(error);
+                    setError(error);
                   }}
                   onRecordingStart={handleRecordingStart}
                   isSpeaking={isSpeaking}

@@ -92,7 +92,21 @@ export const useTTS = (voice = 'nova') => {
         }
         
         currentText += (i > 0 ? ' ' : '') + words[i];
-        onTextUpdate?.(currentText);
+        
+        // Handle async onTextUpdate callback
+        try {
+          if (onTextUpdate) {
+            await onTextUpdate(currentText);
+          }
+        } catch (error) {
+          console.error('🔊 PLAY AUDIO: Error in onTextUpdate callback', {
+            error: error.message,
+            wordIndex: i,
+            currentText: currentText?.substring(0, 50) + (currentText?.length > 50 ? '...' : ''),
+            timestamp: new Date().toISOString()
+          });
+          // Continue even if callback fails
+        }
         
         await new Promise((resolve) => {
           const timer = setTimeout(resolve, timePerWord);
