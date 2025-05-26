@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { textToSpeech } from '../services/tts';
 
+// Custom hook for text-to-speech functionality with synchronized typing
 export const useTTS = (voice = 'nova') => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioRef = useRef(null);
   const playbackCancelToken = useRef(null);
 
+  // Stop current audio playback and reset state
   const stopPlayback = useCallback(async () => {
     console.log('🔊 STOP PLAYBACK: Called', {
       isSpeaking,
@@ -35,7 +37,8 @@ export const useTTS = (voice = 'nova') => {
     console.log('🔊 STOP PLAYBACK: Completed');
   }, [isSpeaking]);
 
-  const playAudioWithTyping = useCallback(async (text, cancelToken, onTextUpdate) => {
+  // Play audio with synchronized word-by-word text display
+  const playAudioWithTyping = useCallback(async (text, cancelToken, onTextUpdate, onComplete) => {
     if (!text || !text.trim()) return;
     
     console.log('🔊 PLAY AUDIO: Starting playback', {
@@ -93,10 +96,10 @@ export const useTTS = (voice = 'nova') => {
         
         currentText += (i > 0 ? ' ' : '') + words[i];
         
-        // Handle async onTextUpdate callback
+        // Handle onTextUpdate callback (UI update only)
         try {
           if (onTextUpdate) {
-            await onTextUpdate(currentText);
+            onTextUpdate(currentText);
           }
         } catch (error) {
           console.error('🔊 PLAY AUDIO: Error in onTextUpdate callback', {
@@ -137,6 +140,15 @@ export const useTTS = (voice = 'nova') => {
         });
       }
       
+      // Call completion callback to save final message
+      if (onComplete && !cancelToken?.cancelled) {
+        try {
+          await onComplete(text);
+        } catch (error) {
+          console.error('🔊 PLAY AUDIO: Error in onComplete callback', error);
+        }
+      }
+
       setIsSpeaking(false);
       URL.revokeObjectURL(url);
       console.log('🔊 PLAY AUDIO: Playback completed successfully');
@@ -152,6 +164,7 @@ export const useTTS = (voice = 'nova') => {
     }
   }, [voice]);
 
+  // Handle recording start by stopping any ongoing playback
   const handleRecordingStart = useCallback(async () => {
     console.log('🔊 RECORDING START: Called', {
       isSpeaking,
@@ -165,6 +178,7 @@ export const useTTS = (voice = 'nova') => {
     }
   }, [isSpeaking, stopPlayback]);
 
+  // Clean up TTS resources and cancel ongoing operations
   const cleanup = useCallback(async () => {
     console.log('🔊 CLEANUP: Starting TTS cleanup', {
       isSpeaking,

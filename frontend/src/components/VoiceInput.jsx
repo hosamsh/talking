@@ -5,6 +5,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import { createAudioChunkHandler } from '../services/recorder';
 import { transcribeAudio } from '../services/stt';
 
+// Voice input component for recording and transcribing speech
 const VoiceInput = forwardRef(({ 
   onTextUpdate, 
   onLoadingChange, 
@@ -139,6 +140,7 @@ const VoiceInput = forwardRef(({
     };
   }, []); // Empty dependencies - only run once
   
+  // Handle recording start/stop toggle
   const handleToggleRecording = useCallback(async () => {
     console.log('🎤 TOGGLE RECORDING: Function called', {
       isRecording,

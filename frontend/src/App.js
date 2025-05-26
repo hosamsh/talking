@@ -5,6 +5,7 @@ import MicIcon from '@mui/icons-material/Mic';
 
 import InterviewPage from './pages/InterviewPage';
 
+// Main application component with routing and navigation
 function App() {
   return (
     <Router>
@@ -34,6 +35,7 @@ function App() {
   );
 }
 
+// Home page component displaying welcome message and navigation options
 function Home() {
   return (
     <Box 

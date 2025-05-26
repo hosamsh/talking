@@ -2,6 +2,7 @@
 import React from 'react';
 import { Box, LinearProgress, Typography } from '@mui/material';
 
+// Component for displaying audio level with visual indicator
 function AudioLevelIndicator({ audioLevel, isSpeaking }) {
   return (
     <Box sx={{ mb: 3 }}>

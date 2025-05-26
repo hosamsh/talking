@@ -1,3 +1,4 @@
+// Set up audio analyser for real-time audio level monitoring
 export const setupAudioAnalyser = async () => {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   
@@ -11,6 +12,7 @@ export const setupAudioAnalyser = async () => {
   return { stream, audioContext, analyser };
 };
 
+// Analyze audio level and detect speech activity
 export const analyzeAudioLevel = (analyser) => {
   if (!analyser) return { level: 0, isSpeaking: false };
   
@@ -30,6 +32,7 @@ export const analyzeAudioLevel = (analyser) => {
   return { level: normalizedLevel, isSpeaking };
 };
 
+// Clean up audio resources and stop recording
 export const cleanupAudio = (mediaRecorder, audioContext, animationFrame) => {
   if (mediaRecorder) {
     if (mediaRecorder.state === 'recording') {

@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import { getInterviewTypes } from '../services/interviews';
 
+// Component for selecting and starting an interview type
 const InterviewSelector = ({ onStartInterview, onError }) => {
   const [interviewType, setInterviewType] = useState('');
   const [interviewTypes, setInterviewTypes] = useState([]);
@@ -11,6 +12,7 @@ const InterviewSelector = ({ onStartInterview, onError }) => {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // Load available interview types from backend
     const loadInterviewTypes = async () => {
       try {
         console.log('📋 INTERVIEW SELECTOR: Loading interview types from backend');
@@ -22,7 +24,7 @@ const InterviewSelector = ({ onStartInterview, onError }) => {
         
         console.log('📋 INTERVIEW SELECTOR: Interview types loaded successfully', {
           typesCount: types.length,
-          types: types.map(t => ({ id: t.id, name: t.name }))
+          types: types.map(t => ({ id: t.id, title: t.title }))
         });
       } catch (err) {
         console.error('📋 INTERVIEW SELECTOR: Failed to load interview types', {
@@ -37,6 +39,7 @@ const InterviewSelector = ({ onStartInterview, onError }) => {
     loadInterviewTypes();
   }, []);
 
+  // Handle interview start button click
   const handleStartInterview = () => {
     if (!interviewType) {
       onError('Please select an interview type');
@@ -96,7 +99,7 @@ const InterviewSelector = ({ onStartInterview, onError }) => {
         >
           {interviewTypes.map(type => (
             <MenuItem key={type.id} value={type.id}>
-              {type.name}
+              {type.title}
             </MenuItem>
           ))}
         </Select>
@@ -105,7 +108,7 @@ const InterviewSelector = ({ onStartInterview, onError }) => {
       {selectedInterview && (
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6">
-            {selectedInterview.name}
+            {selectedInterview.title}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {selectedInterview.description}

@@ -61,6 +61,28 @@ export const addMessage = async (sessionId, role, text, metadata = {}) => {
 };
 
 /**
+ * Get messages from an interview session
+ * 
+ * @param {string} sessionId - The session ID
+ * @returns {Promise<Object>} - Session data with messages array
+ */
+export const getSessionMessages = async (sessionId) => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/interviews/sessions/${sessionId}/messages`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get session messages: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Failed to get session messages:', error.message);
+    throw new Error(error.message || 'Error getting session messages');
+  }
+};
+
+/**
  * End an interview session
  * 
  * @param {string} sessionId - The session ID
@@ -81,5 +103,27 @@ export const endSession = async (sessionId) => {
   } catch (error) {
     console.error('Failed to end session:', error.message);
     throw new Error(error.message || 'Error ending session');
+  }
+};
+
+/**
+ * Get session status
+ * 
+ * @param {string} sessionId - The session ID
+ * @returns {Promise<Object>} - Session status data
+ */
+export const getSessionStatus = async (sessionId) => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/interviews/sessions/${sessionId}/status`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get session status: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Failed to get session status:', error.message);
+    throw new Error(error.message || 'Error getting session status');
   }
 }; 

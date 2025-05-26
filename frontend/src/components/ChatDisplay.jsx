@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Box, Typography, Chip } from '@mui/material';
 
+// Component for displaying chat messages with typing indicators
 const ChatDisplay = ({ messages, isSpeaking }) => {
   console.log('💬 ChatDisplay COMPONENT RENDER', {
     messagesCount: messages?.length || 0,

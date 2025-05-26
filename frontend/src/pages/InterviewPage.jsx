@@ -9,9 +9,10 @@ import InterviewSelector from '../components/InterviewSelector';
 import { useTTS } from '../hooks/useTTS';
 import { useChat } from '../hooks/useChat';
 
+// Main interview page component for conducting AI-powered interviews
 function InterviewPage() {
   const voiceInputRef = useRef(null);
-  
+
   const [interviewType, setInterviewType] = useState('');
   const [interviewStarted, setInterviewStarted] = useState(false);
   const [error, setError] = useState('');
@@ -28,14 +29,18 @@ function InterviewPage() {
   const {
     messages,
     loading,
+    interviewEnded,
+    endReason,
     addUserMessage,
     addInterviewerMessage,
     updateLastInterviewerMessage,
+    saveInterviewerMessage,
     generateInterviewerResponse,
     initializeConversation,
     cleanup: chatCleanup
   } = useChat();
 
+  // Handle ending the interview and cleanup
   const handleEndInterview = useCallback(async () => {
     try {
       // 1. Stop TTS and audio playback
@@ -59,6 +64,7 @@ function InterviewPage() {
     }
   }, [ttsCleanup, chatCleanup, setInterviewStarted, setInterviewType, setError]);
 
+  // Handle starting a new interview
   const handleStartInterview = async (selectedInterviewType) => {
     console.log('🚀 HANDLE START INTERVIEW: Function called', { selectedInterviewType });
     
@@ -82,9 +88,10 @@ function InterviewPage() {
     }
   };
 
+  // Send interviewer message with TTS playback
   const sendInterviewerMessage = async (text, currentInterviewType = interviewType) => {
     console.log('📤 SEND INTERVIEWER MESSAGE: Called with', { text, currentInterviewType });
-    
+
     try {
       console.log('📤 SEND INTERVIEWER MESSAGE: Adding interviewer message placeholder');
       addInterviewerMessage();
@@ -105,17 +112,13 @@ function InterviewPage() {
       
       playbackCancelToken.current = { cancelled: false };
       
-      // Create async wrapper for updateLastInterviewerMessage
-      const asyncUpdateMessage = async (text) => {
-        try {
-          await updateLastInterviewerMessage(text);
-        } catch (error) {
-          // Don't throw - let the UI update continue even if session update fails
-        }
-      };
-      
       console.log('📤 SEND INTERVIEWER MESSAGE: Starting audio playback');
-      await playAudioWithTyping(assistantText, playbackCancelToken.current, asyncUpdateMessage);
+      await playAudioWithTyping(
+        assistantText, 
+        playbackCancelToken.current, 
+        updateLastInterviewerMessage, // UI-only updates during typing
+        saveInterviewerMessage // Save to backend when complete
+      );
       console.log('📤 SEND INTERVIEWER MESSAGE: Audio playback completed');
     } catch (err) {
       console.error('📤 SEND INTERVIEWER MESSAGE: Error occurred', err);
@@ -123,11 +126,17 @@ function InterviewPage() {
     }
   };
 
+  // Handle user's spoken response
   const handleUserResponse = async (userText, isInterruption = false) => {
     console.log('🎯 HANDLE USER RESPONSE: Called with', { userText, isInterruption });
-    
+
     if (!userText || !userText.trim()) {
       console.log('🎯 HANDLE USER RESPONSE: Empty text, returning early');
+      return;
+    }
+
+    if (interviewEnded) {
+      console.log('🎯 HANDLE USER RESPONSE: Interview ended, ignoring response');
       return;
     }
     
@@ -139,7 +148,7 @@ function InterviewPage() {
     try {
       console.log('🎯 HANDLE USER RESPONSE: Adding user message to chat');
       await addUserMessage(userText, isInterruption);
-      
+    
       console.log('🎯 HANDLE USER RESPONSE: Calling sendInterviewerMessage');
       await sendInterviewerMessage("Continue the interview based on the candidate's response.");
       
@@ -150,6 +159,7 @@ function InterviewPage() {
     }
   };
 
+  // Handle recording start by stopping any ongoing speech
   const handleRecordingStart = useCallback(async () => {
     if (isSpeaking) {
       await stopPlayback();
@@ -181,10 +191,35 @@ function InterviewPage() {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         
         {!interviewStarted ? (
-          <InterviewSelector 
-            onStartInterview={handleStartInterview}
-            onError={setError}
-          />
+            <InterviewSelector 
+              onStartInterview={handleStartInterview}
+              onError={setError}
+            />
+        ) : interviewEnded ? (
+          <>
+            <ChatDisplay messages={messages} isSpeaking={false} />
+            
+            <Box sx={{ mt: 3, p: 3, bgcolor: 'grey.50', borderRadius: 2, textAlign: 'center' }}>
+              <Typography variant="h6" color="primary" gutterBottom>
+                Interview Completed
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {endReason || 'The interview has been concluded.'}
+              </Typography>
+              <Button 
+                variant="contained" 
+                color="primary"
+                onClick={() => {
+                  setInterviewStarted(false);
+                  setInterviewType('');
+                  setError('');
+                }}
+                sx={{ mt: 1 }}
+              >
+                Start New Interview
+              </Button>
+            </Box>
+          </>
         ) : (
           <>
             <ChatDisplay messages={messages} isSpeaking={isSpeaking} />
@@ -223,6 +258,7 @@ function InterviewPage() {
                   }}
                   onRecordingStart={handleRecordingStart}
                   isSpeaking={isSpeaking}
+                  disabled={interviewEnded}
                 />
               </Box>
             </Box>
